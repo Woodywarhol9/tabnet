@@ -492,7 +492,7 @@ class TabNet(torch.nn.Module):
         n_d=8,
         n_a=8,
         n_steps=3,
-        gamma=1.3,
+        gamma=1.3, 
         cat_idxs=[],
         cat_dims=[],
         cat_emb_dim=1,
@@ -502,6 +502,7 @@ class TabNet(torch.nn.Module):
         virtual_batch_size=128,
         momentum=0.02,
         mask_type="sparsemax",
+        pretrained_embed=None
     ):
         """
         Defines TabNet network
@@ -541,6 +542,8 @@ class TabNet(torch.nn.Module):
             Float value between 0 and 1 which will be used for momentum in all batch norm
         mask_type : str
             Either "sparsemax" or "entmax" : this is the masking function to use
+        pretrained_embed : np.array
+            사전 훈련된 pretrained_embed를 불러옵니다.
         """
         super(TabNet, self).__init__()
         self.cat_idxs = cat_idxs or []
@@ -564,7 +567,7 @@ class TabNet(torch.nn.Module):
             raise ValueError("n_shared and n_independent can't be both zero.")
 
         self.virtual_batch_size = virtual_batch_size
-        self.embedder = EmbeddingGenerator(input_dim, cat_dims, cat_idxs, cat_emb_dim)
+        self.embedder = EmbeddingGenerator(input_dim, cat_dims, cat_idxs, cat_emb_dim, pretrained_embed)
         self.post_embed_dim = self.embedder.post_embed_dim
         self.tabnet = TabNetNoEmbeddings(
             self.post_embed_dim,
@@ -780,7 +783,7 @@ class EmbeddingGenerator(torch.nn.Module):
     Classical embeddings generator
     """
 
-    def __init__(self, input_dim, cat_dims, cat_idxs, cat_emb_dim):
+    def __init__(self, input_dim, cat_dims, cat_idxs, cat_emb_dim, pretrained_embed = None):
         """This is an embedding module for an entire set of features
 
         Parameters
@@ -795,6 +798,7 @@ class EmbeddingGenerator(torch.nn.Module):
         cat_emb_dim : int or list of int
             Embedding dimension for each categorical features
             If int, the same embedding dimension will be used for all categorical features
+        pretrained_embed : 사전 훈련된 가중치 Tensor
         """
         super(EmbeddingGenerator, self).__init__()
         if cat_dims == [] and cat_idxs == []:
@@ -827,13 +831,19 @@ class EmbeddingGenerator(torch.nn.Module):
         )
 
         self.embeddings = torch.nn.ModuleList()
+        if pretrained_embed is not None:
+            self.pretrained_embed = torch.Tensor(pretrained_embed)
 
         # Sort dims by cat_idx
         sorted_idxs = np.argsort(cat_idxs)
         cat_dims = [cat_dims[i] for i in sorted_idxs]
         self.cat_emb_dims = [self.cat_emb_dims[i] for i in sorted_idxs]
 
-        for cat_dim, emb_dim in zip(cat_dims, self.cat_emb_dims):
+        for i, (cat_dim, emb_dim) in enumerate(zip(cat_dims, self.cat_emb_dims)):
+            if pretrained_embed is not None:
+                if i == 0:
+                    self.embeddings.append(torch.nn.Embedding.from_pretrained(self.pretrained_embed))
+                    continue
             self.embeddings.append(torch.nn.Embedding(cat_dim, emb_dim))
 
         # record continuous indices

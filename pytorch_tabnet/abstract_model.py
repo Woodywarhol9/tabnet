@@ -64,6 +64,7 @@ class TabModel(BaseEstimator):
     device_name: str = "auto"
     n_shared_decoder: int = 1
     n_indep_decoder: int = 1
+    pretrained_embed: np.ndarray = None
 
     def __post_init__(self):
         self.batch_size = 1024
@@ -583,6 +584,7 @@ class TabModel(BaseEstimator):
             virtual_batch_size=self.virtual_batch_size,
             momentum=self.momentum,
             mask_type=self.mask_type,
+            pretrained_embed=self.pretrained_embed,
         ).to(self.device)
 
         self.reducing_matrix = create_explain_matrix(
